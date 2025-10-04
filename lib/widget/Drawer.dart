@@ -76,7 +76,7 @@ class _DrawerScreenState extends State<DrawerScreen> {
                     child: AnimatedTextKit(
                       animatedTexts: [
                         TyperAnimatedText(
-                          'Tilmamme',
+                          'Tilmaame',
                           textStyle: const TextStyle(fontFamily: "Merienda"),
                           speed: const Duration(milliseconds: 150),
                         ),
@@ -234,7 +234,7 @@ class _DrawerScreenState extends State<DrawerScreen> {
                   title: const Text("Profile"),
                   onTap: () => Get.to(() => const ProfileUpdatePage()),
                 ),
-                // Drawer থেকে
+                // Drawer
                 ListTile(
                   leading: const Icon(Icons.dashboard),
                   title: const Text("Dashboard"),

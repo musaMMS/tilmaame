@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,7 +20,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool isLoggedIn = false;
-
+  bool hasInternet = true; // 🔹 Internet check state
 
   final List<String> partners = [
     "assets/cars/acura-logo.png",
@@ -35,22 +36,19 @@ class _HomePageState extends State<HomePage> {
       "name": "John Carter",
       "role": "Customer",
       "img": "assets/owner/istockphoto-1438133166-612x612.jpg",
-      "text":
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis ac eros vel magna tempor gravida."
+      "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
     },
     {
       "name": "Sarah Miller",
       "role": "Business Partner",
       "img": "assets/owner/istockphoto-1438133166-612x612.jpg",
-      "text":
-      "Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae."
+      "text": "Vestibulum ante ipsum primis in faucibus orci luctus."
     },
     {
       "name": "Michael Lee",
       "role": "Car Owner",
       "img": "assets/owner/istockphoto-1499761455-612x612.jpg",
-      "text":
-      "Praesent posuere sem nec urna fermentum, sit amet facilisis odio tincidunt."
+      "text": "Praesent posuere sem nec urna fermentum tincidunt."
     },
   ];
 
@@ -58,6 +56,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _checkLoginStatus();
+    _checkInternet(); // 🔹 Start by checking internet
   }
 
   Future<void> _checkLoginStatus() async {
@@ -68,17 +67,28 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// 🔹 Internet check
+  Future<void> _checkInternet() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+        setState(() => hasInternet = true);
+      }
+    } on SocketException catch (_) {
+      setState(() => hasInternet = false);
+    }
+  }
+
+  /// 🔹 Pull-to-refresh
+  Future<void> _onRefresh() async {
+    await _checkInternet();
+    await Future.delayed(const Duration(seconds: 1));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 600;
-    final bool isTablet = screenWidth >= 600 && screenWidth < 1024;
-
     return WillPopScope(
-      onWillPop: () async {
-        bool exit = await showExitDialog(context);
-        return exit;
-      },
+      onWillPop: () async => await showExitDialog(context),
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: AppColors.primary,
@@ -100,263 +110,128 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         endDrawer: DrawerScreen(),
-        body: CustomScrollView(
-          slivers: [
-            // Banner Carousel
-            SliverToBoxAdapter(
-              child: FutureBuilder<List<MyCar>>(
-                future: MyCarApiService.fetchCars(), // API call returning List<Car>
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return SizedBox(
-                      height: isMobile ? 180 : isTablet ? 260 : 350,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  } else if (snapshot.hasError) {
-                    return SizedBox(
-                      height: isMobile ? 180 : isTablet ? 260 : 350,
-                      child: Center(child: Text("Failed to load images")),
-                    );
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return SizedBox(
-                      height: isMobile ? 180 : isTablet ? 260 : 350,
-                      child: Center(child: Text("No images available")),
-                    );
-                  }
 
-                  final bannerImages = snapshot.data!;
+        // 🔹 Offline Mode UI check
+        body: hasInternet
+            ? RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: _buildMainContent(context),
+        )
+            : _buildOfflineUI(),
+      ),
+    );
+  }
 
-                  String fullImageUrl(String relativePath) {
-                    return "https://apps.piit.us/new/tilmaame/$relativePath";
-                  }
+  /// 🔹 Main UI content (when internet available)
+  Widget _buildMainContent(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bool isMobile = screenWidth < 600;
+    final bool isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-                  return CarouselSlider(
-                    options: CarouselOptions(
-                      height: isMobile ? 180 : isTablet ? 260 : 350,
-                      autoPlay: true,
-                      viewportFraction: 1,
-                      enlargeCenterPage: false,
-                    ),
-                    items: bannerImages.map((car) => ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        fullImageUrl(car.image), // relative path → full URL
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Center(child: Icon(Icons.broken_image, size: 50)),
-                      ),
-                    )).toList(),
-                  );
-                },
-              ),
-            ),
+    return CustomScrollView(
+      slivers: [
+        // Banner Carousel
+        SliverToBoxAdapter(
+          child: FutureBuilder<List<MyCar>>(
+            future: MyCarApiService.fetchCars(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return SizedBox(
+                  height: isMobile ? 180 : isTablet ? 260 : 350,
+                  child: const Center(child: CircularProgressIndicator()),
+                );
+              } else if (snapshot.hasError || !snapshot.hasData) {
+                return SizedBox(
+                  height: isMobile ? 180 : isTablet ? 260 : 350,
+                  child: const Center(child: Text("Failed to load images")),
+                );
+              }
 
+              final bannerImages = snapshot.data!;
+              String fullImageUrl(String path) =>
+                  "https://apps.piit.us/new/tilmaame/$path";
 
-            // Available Cars Section
-            SliverToBoxAdapter(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final screenWidth = constraints.maxWidth;
-
-                  // Responsive padding
-                  double horizontalPadding =
-                  screenWidth < 600 ? 12 : screenWidth < 1024 ? 20 : 40;
-                  double verticalPadding = screenWidth < 600 ? 8 : 12;
-                  return Padding(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: horizontalPadding, vertical: verticalPadding),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _sectionTitle("Available ", "Cars"),
-                        SizedBox(height: screenWidth < 600 ? 8 : 12),
-                        // Wrap CategoryScreen with ConstrainedBox
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                              maxHeight: 400), // adjust max height as needed
-                          child: CategoryScreen(),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-// About Us Section
-//             SliverToBoxAdapter(
-//               child: Padding(
-//                 padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8.0),
-//                 child: isMobile
-//                     ? Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     Center(
-//                       child: Container(
-//                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-//                         decoration: BoxDecoration(
-//                           color: Colors.orange.withOpacity(0.2),
-//                           borderRadius: BorderRadius.circular(30),
-//                         ),
-//                         child: const Text(
-//                           "ABOUT",
-//                           style: TextStyle(
-//                             color: Colors.orange,
-//                             fontWeight: FontWeight.bold,
-//                             letterSpacing: 1,
-//                           ),
-//                         ),
-//                       ),
-//                     ),
-//                     const SizedBox(height: 5),
-//                     // RichText(
-//                     //   text: const TextSpan(
-//                     //     text: "Find Out More ",
-//                     //     style: TextStyle(
-//                     //       fontSize: 22,
-//                     //       color: AppColors.textDark,
-//                     //       fontWeight: FontWeight.bold,
-//                     //     ),
-//                     //     children: [
-//                     //       TextSpan(
-//                     //         text: "About Us",
-//                     //         style: TextStyle(
-//                     //           color: AppColors.primary,
-//                     //           fontWeight: FontWeight.bold,
-//                     //         ),
-//                     //       ),
-//                     //     ],
-//                     //   ),
-//                     // ),
-//                 //     const SizedBox(height: 15),
-//                 //     Image.asset(
-//                 //       "assets/owner/istockphoto-2152381827-612x612.jpg",
-//                 //       fit: BoxFit.cover,
-//                 //       height: 160,
-//                 //       width: double.infinity,
-//                 //     ),
-//                 //     const SizedBox(height: 12),
-//                 //     const Text(
-//                 //       "We realize your vehicle needs",
-//                 //       style: TextStyle(
-//                 //           fontSize: 18,
-//                 //           fontWeight: FontWeight.bold,
-//                 //           color: AppColors.textDark),
-//                 //     ),
-//                 //     const SizedBox(height: 6),
-//                 //     Text(
-//                 //       "Lorem ipsum dolor sit amet, consectetur adipiscing elit...",
-//                 //       style: TextStyle(
-//                 //           fontSize: 14, color: AppColors.textLight),
-//                 //     ),
-//                 //     const SizedBox(height: 10),
-//                 //     ElevatedButton(
-//                 //       onPressed: () {
-//                 //         Navigator.push(
-//                 //           context,
-//                 //           MaterialPageRoute(builder: (_) => AboutScreen()),
-//                 //         );
-//                 //       },
-//                 //       style: ElevatedButton.styleFrom(
-//                 //         backgroundColor: AppColors.primary,
-//                 //         minimumSize: const Size(100, 35),
-//                 //       ),
-//                 //       child: const Text("Read More"),
-//                 //     ),
-//                 //   ],
-//                 // )
-//                 //      Row(
-//                 //   children: [
-//                 //     Expanded(
-//                 //       flex: 1,
-//                 //       child: Image.asset(
-//                 //         "assets/owner/istockphoto-2152381827-612x612.jpg",
-//                 //         fit: BoxFit.cover,
-//                 //         height: 200,
-//                 //       ),
-//                 //     ),
-//                 //     const SizedBox(width: 12),
-//                 //     Expanded(
-//                 //       flex: 2,
-//                 //       child: Column(
-//                 //         crossAxisAlignment: CrossAxisAlignment.start,
-//                 //         children: const [
-//                 //           Text(
-//                 //             "We realize your vehicle needs",
-//                 //             style: TextStyle(
-//                 //                 fontSize: 18,
-//                 //                 fontWeight: FontWeight.bold,
-//                 //                 color: AppColors.textDark),
-//                 //           ),
-//                 //           SizedBox(height: 6),
-//                 //           Text(
-//                 //             "Lorem ipsum dolor sit amet, consectetur adipiscing elit...",
-//                 //             style: TextStyle(
-//                 //                 fontSize: 14,
-//                 //                 color: AppColors.textLight),
-//                 //           ),
-//                 //         ],
-//                 //       ),
-//                 //     ),
-//                 //   ],
-//                 // ),
-//               // ),
-//             ),
-
-
-            // Featured Cars Section
-            // Featured Cars Section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: const Text(
-                          "Cars",
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12), // gap adjust
-                    // _sectionTitle("Featured", "Cars"),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 400, // GridView এর height fix
-                      child: CarListScreen(categoryId: 0),
-                    ),
-                  ],
+              return CarouselSlider(
+                options: CarouselOptions(
+                  height: isMobile ? 180 : isTablet ? 260 : 350,
+                  autoPlay: true,
+                  viewportFraction: 1,
                 ),
-              ),
-            ),
-
-
-
-            // Why Choose Us
-            // SliverToBoxAdapter(child: _buildWhyChooseUs(isMobile)),
-
-            // Partners
-            SliverToBoxAdapter(child: _buildPartners(isMobile, isTablet)),
-
-            // Testimonials
-            SliverToBoxAdapter(child: _buildTestimonials(isMobile)),
-
-            // Extra bottom spacing
-            const SliverToBoxAdapter(child: SizedBox(height: 40)),
-          ],
+                items: bannerImages
+                    .map((car) => ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    fullImageUrl(car.image),
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.broken_image,
+                      size: 50,
+                    ),
+                  ),
+                ))
+                    .toList(),
+              );
+            },
+          ),
         ),
+
+        // Cars + Categories
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle("Available ", "Cars"),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 400),
+                  child: CategoryScreen(),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Cars List
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              height: 400,
+              child: CarListScreen(categoryId: 0),
+            ),
+          ),
+        ),
+
+        // Partners + Testimonials
+        SliverToBoxAdapter(child: _buildPartners(isMobile, isTablet)),
+        SliverToBoxAdapter(child: _buildTestimonials(isMobile)),
+        const SliverToBoxAdapter(child: SizedBox(height: 40)),
+      ],
+    );
+  }
+
+  /// 🔹 Offline Mode UI
+  Widget _buildOfflineUI() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.wifi_off, size: 80, color: Colors.redAccent),
+          const SizedBox(height: 16),
+          const Text(
+            "No Internet Connection",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: _checkInternet,
+            icon: const Icon(Icons.refresh),
+            label: const Text("Tap to Retry"),
+          ),
+        ],
       ),
     );
   }
@@ -377,165 +252,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget _buildWhyChooseUs(bool isMobile) {
-  //   return Padding(
-  //     padding: const EdgeInsets.all(16.0),
-  //     child: isMobile
-  //         ? Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         Image.asset(
-  //           "assets/owner/istockphoto-2152381827-612x612.jpg",
-  //           height: 200,
-  //           fit: BoxFit.cover,
-  //           width: double.infinity,
-  //         ),
-  //         const SizedBox(height: 16),
-  //         const Text(
-  //           "Why Choose Us",
-  //           style: TextStyle(
-  //               color: AppColors.primary,
-  //               fontWeight: FontWeight.bold,
-  //               fontSize: 16),
-  //         ),
-  //         const SizedBox(height: 6),
-  //         const Text(
-  //           "Why Customer Love Us",
-  //           style: TextStyle(
-  //               fontSize: 22,
-  //               fontWeight: FontWeight.bold,
-  //               color: AppColors.textDark),
-  //         ),
-  //         const SizedBox(height: 10),
-  //         const Text(
-  //           "✔  Best affordable pricing\n"
-  //               "✔  Exceptional value & transparent\n"
-  //               "✔  Reliable customer support\n"
-  //               "✔  Wide range of vehicles\n"
-  //               "✔  Easy booking options",
-  //           style: TextStyle(fontSize: 14, color: AppColors.textLight),
-  //         ),
-  //         const SizedBox(height: 12),
-  //         ElevatedButton(
-  //           onPressed: () async {
-  //             if (isLoggedIn) {
-  //               Navigator.push(
-  //                 context,
-  //                 MaterialPageRoute(builder: (_) => BookNowDialog()),
-  //               );
-  //             } else {
-  //               Navigator.push(
-  //                 context,
-  //                 MaterialPageRoute(
-  //                   builder: (context) => LogInScreen(
-  //                       onLoginSuc: (userId, token) async {
-  //                         final prefs = await SharedPreferences.getInstance();
-  //                         await prefs.setString('auth_token', token);   // ✅ Token save
-  //                         await prefs.setString('user_id', userId as String);     // ✅ User ID save
-  //
-  //                         setState(() {
-  //                           isLoggedIn = true;
-  //                         });
-  //                       }
-  //                   ),
-  //                 ),
-  //               );
-  //             }
-  //           },
-  //           style:
-  //           ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-  //           child: const Text("Book Now!"),
-  //         )
-  //       ],
-  //     )
-  //         : Row(
-  //       children: [
-  //         Expanded(
-  //           flex: 1,
-  //           child: Image.asset(
-  //             "assets/owner/istockphoto-2152381827-612x612.jpg",
-  //             height: 280,
-  //             fit: BoxFit.cover,
-  //           ),
-  //         ),
-  //         const SizedBox(width: 16),
-  //         Expanded(
-  //           flex: 1,
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.start,
-  //             children: [
-  //               const Text(
-  //                 "Why Choose Us",
-  //                 style: TextStyle(
-  //                     color: AppColors.primary,
-  //                     fontWeight: FontWeight.bold,
-  //                     fontSize: 16),
-  //               ),
-  //               const SizedBox(height: 6),
-  //               const Text(
-  //                 "Why Customer Love Us",
-  //                 style: TextStyle(
-  //                     fontSize: 22,
-  //                     fontWeight: FontWeight.bold,
-  //                     color: AppColors.textDark),
-  //               ),
-  //               const SizedBox(height: 10),
-  //               const Text(
-  //                 "✔  Best affordable pricing\n"
-  //                     "✔  Exceptional value & transparent\n"
-  //                     "✔  Reliable customer support\n"
-  //                     "✔  Wide range of vehicles\n"
-  //                     "✔  Easy booking options",
-  //                 style:
-  //                 TextStyle(fontSize: 14, color: AppColors.textLight),
-  //               ),
-  //               const SizedBox(height: 12),
-  //               ElevatedButton(
-  //                 onPressed: () async {
-  //                   if (isLoggedIn) {
-  //                     Navigator.push(
-  //                       context,
-  //                       MaterialPageRoute(builder: (_) => BookNowDialog()),
-  //                     );
-  //                   } else {
-  //                     Navigator.push(
-  //                       context,
-  //                       MaterialPageRoute(
-  //                         builder: (context) => LogInScreen(
-  //                             onLoginSuc: (userId, token) async {
-  //                               final prefs = await SharedPreferences.getInstance();
-  //                               await prefs.setString('auth_token', token);   // ✅ Token save
-  //                               await prefs.setString('user_id', userId as String);     // ✅ User ID save
-  //
-  //                               setState(() {
-  //                                 isLoggedIn = true;
-  //                               });
-  //                             }
-  //                         ),
-  //                       ),
-  //                     );
-  //                   }
-  //                 },
-  //                 style: ElevatedButton.styleFrom(
-  //                     backgroundColor: AppColors.primary),
-  //                 child: const Text("Book Now!"),
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
   Widget _buildPartners(bool isMobile, bool isTablet) {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Column(
         children: [
-          Chip(
-            backgroundColor: AppColors.primary.withOpacity(0.1),
-            label: const Text(
+          const Chip(
+            backgroundColor: Color(0xFFE3F2FD),
+            label: Text(
               "VALUABLE PARTNERS",
               style: TextStyle(
                   color: AppColors.primary, fontWeight: FontWeight.bold),
@@ -554,13 +278,9 @@ class _HomePageState extends State<HomePage> {
             ),
             itemBuilder: (context, index) {
               return Card(
-                elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Image.asset(
-                    partners[index],
-                    fit: BoxFit.contain,
-                  ),
+                  child: Image.asset(partners[index], fit: BoxFit.contain),
                 ),
               );
             },
@@ -573,61 +293,47 @@ class _HomePageState extends State<HomePage> {
   Widget _buildTestimonials(bool isMobile) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          _sectionTitle("Business ", " Partner"),
-          const SizedBox(height: 16),
-          CarouselSlider(
-            options: CarouselOptions(
-              height: isMobile ? 220 : 280,
-              autoPlay: true,
-              enlargeCenterPage: true,
-              viewportFraction: 0.9,
-            ),
-            items: testimonials.map((item) {
-              return Card(
-                elevation: 4,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircleAvatar(
-                        backgroundImage: AssetImage(item["img"]!),
-                        radius: 28,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item["name"]!,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textDark),
-                      ),
-                      Text(
-                        item["role"]!,
-                        style: const TextStyle(
-                            color: AppColors.textLight, fontSize: 12),
-                      ),
-                      const SizedBox(height: 8),
-                      Flexible(
-                        child: Text(
-                          item["text"]!,
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, color: AppColors.textDark),
-                        ),
-                      ),
-                    ],
+      child: CarouselSlider(
+        options: CarouselOptions(
+          height: isMobile ? 220 : 280,
+          autoPlay: true,
+          enlargeCenterPage: true,
+          viewportFraction: 0.9,
+        ),
+        items: testimonials.map((item) {
+          return Card(
+            elevation: 4,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    backgroundImage: AssetImage(item["img"]!),
+                    radius: 28,
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+                  const SizedBox(height: 8),
+                  Text(item["name"]!,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark)),
+                  Text(item["role"]!,
+                      style: const TextStyle(
+                          color: AppColors.textLight, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: Text(
+                      item["text"]!,
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

@@ -14,12 +14,12 @@ class BookingFormPage extends StatefulWidget {
   final String carName;
   final int amount;
   final String userId;
+
   const BookingFormPage({
     super.key,
     required this.carName,
     required this.carId,
-    required this.amount,
-    required this.userId,
+    required this.amount, required this.userId,
   });
 
   @override
@@ -35,12 +35,21 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
   DateTime? _startDate;
   DateTime? _endDate;
+  String _userId = "";
 
   @override
   void initState() {
     super.initState();
     _carNameController.text = widget.carName;
     _amountController.text = widget.amount.toString();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userId = prefs.getString('user_id') ?? '';
+    });
   }
 
   void _calculateTotalAmount() {
@@ -81,6 +90,12 @@ class _BookingFormPageState extends State<BookingFormPage> {
       return;
     }
 
+    if (_userId.isEmpty) {
+      Get.snackbar("Error", "You are not logged in",
+          backgroundColor: Colors.red, colorText: Colors.white);
+      return;
+    }
+
     final startDate =
         "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}";
     final endDate =
@@ -93,7 +108,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
       "start_date": startDate,
       "end_date": endDate,
       "note": _noteController.text,
-      "user_id": widget.userId,
+      "user_id": _userId, // ✅ dynamic userId
       "order_number": "INV-${DateTime.now().millisecondsSinceEpoch}"
     };
 
@@ -114,17 +129,20 @@ class _BookingFormPageState extends State<BookingFormPage> {
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwcHMucGlpdC51cy9uZXcvdGlsbWFhbWUvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzU4Nzc1MzQ2LCJleHAiOjE3NTk5ODQ5NDYsIm5iZiI6MTc1ODc3NTM0NiwianRpIjoiREhGNDlWWUZhbGtnNUc4RSIsInN1YiI6IjM5IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.Tytey-Usr3qq4fpKdS0hHjg8kkuFM7rmDUo7tS9kbio",
+          "Authorization": "Bearer $token", // ✅ dynamic token
         },
         body: json.encode(bookingData),
       );
+
+      print("📤 Booking Request Data: $bookingData");
+      print("📥 Booking Response: ${response.statusCode} -> ${response.body}");
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           Get.snackbar("✅ Success", "Booking Created Successfully",
               backgroundColor: Colors.green, colorText: Colors.white);
-          Get.offAll(() => const DashboardScreen(isFromDrawer: false,));
+          Get.offAll(() => const DashboardScreen(isFromDrawer: false));
         } else {
           Get.snackbar("⚠️ Failed", data['message'] ?? "Booking failed",
               backgroundColor: Colors.red, colorText: Colors.white);
@@ -146,17 +164,17 @@ class _BookingFormPageState extends State<BookingFormPage> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: ()async{
-        Get.offAll(()=>CarDetailsScreen(
-            carId: '',
-            title: '',
-            image: '',
-            price: '',
-            features: '',
-            description: '',
-            carType: '',
-            userId: ''),
-        );
+      onWillPop: () async {
+        Get.offAll(() => CarDetailsScreen(
+          carId: '',
+          title: '',
+          image: '',
+          price: '',
+          features: '',
+          description: '',
+          carType: '',
+          userId: '',
+        ));
         return false;
       },
       child: Scaffold(
@@ -171,7 +189,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
         ),
         body: SafeArea(
           child: SingleChildScrollView(
-            // padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -183,7 +200,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
                 ),
                 const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),

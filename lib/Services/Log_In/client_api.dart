@@ -15,7 +15,7 @@ class ApiClient {
     final res = await http.get(uri, headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwcHMucGlpdC51cy9uZXcvdGlsbWFhbWUvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzU5MTQ1MTIxLCJleHAiOjE3NjAzNTQ3MjEsIm5iZiI6MTc1OTE0NTEyMSwianRpIjoidEx0bWlqM3VPQXlKbXVBRiIsInN1YiI6IjM5IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.aIxcBN8n4aDgBF4minTTMM3CUkuYNQ5NhdFD59fZ9uo",
+      "Authorization": "Bearer $token",
     });
 
     print("GET $uri => ${res.statusCode}");
@@ -47,7 +47,7 @@ class ApiClient {
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwcHMucGlpdC51cy9uZXcvdGlsbWFhbWUvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzU5MTQ1MTIxLCJleHAiOjE3NjAzNTQ3MjEsIm5iZiI6MTc1OTE0NTEyMSwianRpIjoidEx0bWlqM3VPQXlKbXVBRiIsInN1YiI6IjM5IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.aIxcBN8n4aDgBF4minTTMM3CUkuYNQ5NhdFD59fZ9uo",
+        "Authorization": "Bearer $token",
       },
       body: jsonEncode(body),
     );

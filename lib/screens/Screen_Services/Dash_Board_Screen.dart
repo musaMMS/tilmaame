@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tilmaame/Screens/Home_screen.dart';
 import '../../Services/Booking/Booking_api.dart';
 import '../../widget/color.dart';
 import '../../Services/Booking/Booking_Model.dart';
 import 'Booking_screwen.dart';
 import 'Paytment_Form_screen.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 import 'Web_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   final bool isFromDrawer;
-  const DashboardScreen({super.key,  this.isFromDrawer = false});
+  final bool isFromBooking;
+  const DashboardScreen({super.key,  this.isFromDrawer = false, this.isFromBooking =false});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -64,16 +65,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return WillPopScope(
       onWillPop: () async {
         if (widget.isFromDrawer) {
-          Get.offAll(() =>
-              BookingFormPage(
-                carName: '',
-                carId: '',
-                amount: 0,
-                userId: '',
-              ));
+          Get.offAll(() => const HomePage());
+          return false;
+        } else if (widget.isFromBooking) {
+          Get.offAll(() => BookingFormPage(
+            carName: '',
+            carId: '',
+            amount: 0,
+            userId: '',
+          ));
           return false;
         }
-        return true;
+        return true; // default back
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -188,7 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
 
             return const Center(
-                child: Text("Desktop/Table view code এখানে একইভাবে আপডেট করো"));
+                child: Text("Desktop/Table view code "));
           },
         ),
       ),
